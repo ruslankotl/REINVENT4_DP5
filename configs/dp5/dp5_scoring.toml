@@ -1,0 +1,13 @@
+
+[[component]]
+[component.DP5]
+
+[[component.DP5.endpoint]]
+weight = 1  # user chosen name for output
+name = "DP5 Score"  # weight to fine-tune the relevance of this component
+
+params.python_path = "/home/rk582/miniconda3/envs/dp5_cascade/bin/python"
+params.pydp4_path = "/home/rk582/DP5_rewrite/PyDP4.py"
+params.workflow = "dp5" # "dp5" for DP5 analysis, "cmae" for 13C mean abs. error., "cmax" for 13C maximum absolute error
+params.nmr_file = "/home/rk582/DP5_rewrite/S3/S3_NMR"
+
