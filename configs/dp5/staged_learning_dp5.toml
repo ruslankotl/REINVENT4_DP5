@@ -1,0 +1,88 @@
+# REINVENT4 TOML input example for reinforcement/curriculum learning
+#
+#
+# Curriculum learning in REINVENT4 is a multi-stage reinforcement learning
+# run.  One or more stages (auto CL) can be defined.  But it is also
+# possible to continue a run from any checkpoint file that is generated
+# during the run (manual CL).  Currently checkpoints are written at the end
+# of a run also when the run is forcefully terminated with Ctrl-C.
+
+
+run_type = "staged_learning"
+use_cuda = true  # run on the GPU if true, on the CPU if false
+tb_logdir = "tb_logs"  # name of the TensorBoard logging directory
+json_out_config = "_staged_learning.json"  # write this TOML to JSON
+
+[parameters]
+
+# Uncomment one of the comment blocks below.  Each generator needs a model
+# file and possibly a SMILES file with seed structures.  If the run is to
+# be continued after termination, the agent_file would have to be replaced
+# with the checkpoint file.
+
+summary_csv_prefix = "staged_learning"  # prefix for the CSV file
+use_checkpoint = false  # if true read diversity filter from agent_file
+purge_memories = false  # if true purge all diversity filter memories after each stage
+
+## Mol2Mol
+# consider playing with mol2mol priors in priors folder
+prior_file = "priors/mol2mol_scaffold_generic.prior"
+agent_file = "priors/mol2mol_scaffold_generic.prior"
+smiles_file = "configs/toml/mol2mol.smi"  # 1 compound per line
+#ample_strategy = "multinomial"  # multinomial or beamsearch (deterministic)
+distance_threshold = 100
+
+batch_size = 16          # network
+
+unique_sequences = true  # if true remove all duplicates raw sequences in each step
+                         # only here for backward compatibility
+randomize_smiles = true  # if true shuffle atoms in SMILES randomly
+
+
+[learning_strategy]
+
+type = "dap"      # dap: only one supported
+sigma = 128       # sigma of the RL reward function
+rate = 0.0001     # for torch.optim
+
+
+[diversity_filter]  # optional, comment section out or remove if unneeded
+                    # NOTE: also memorizes all seen SMILES
+
+type = "IdenticalMurckoScaffold" # IdenticalTopologicalScaffold,
+                                 # ScaffoldSimilarity, PenalizeSameSmiles
+bucket_size = 25                 # memory size in number of compounds
+minscore = 0.4                   # only memorize if this threshold is exceeded
+minsimilarity = 0.4              # minimum similarity for ScaffoldSimilarity
+penalty_multiplier = 0.5         # penalty factor for PenalizeSameSmiles
+
+
+# Reinvent only: guide RL in the initial phase
+#[inception]  # optional, comment sectionout or remove if unneeded
+
+#smiles_file = "sampled.smi"  # "good" SMILES for guidance
+#memory_size = 100  # number of total SMILES held in memory
+#sample_size = 10  # number of SMILES randomly chosen each epoch
+
+
+### Stage 1
+### Note that stages must always be a list i.e. double brackets
+[[stage]]
+
+chkpt_file = 'test1.chkpt'  # name of the checkpoint file, can be reused as agent
+
+termination = "simple"  # termination criterion fot this stage
+max_score = 0.6  # terminate if this total score is exceeded
+min_steps = 25  # run for at least this number of steps
+max_steps = 100  # terminate entire run when exceeded
+
+[stage.scoring]
+type = "geometric_mean"  # aggregation function
+
+filename = "REINVENT4_DP5/configs/toml/dp5_scoring.toml"  # file with scoring setup for this stage
+filetype = "toml"  # file format: TOML or JSON, no default, must be present
+
+
+
+
+
