@@ -12,7 +12,7 @@ F.i., if the target formula is C2H4, the scoring function is the average of thre
 
 from __future__ import annotations
 
-__all__ = ["Formula"]
+__all__ = ["MolecularFormula"]
 
 from dataclasses import dataclass
 from typing import List, Tuple
@@ -42,7 +42,7 @@ class Parameters:
     formula: List[str]
 
 
-class Formula:
+class MolecularFormula:
     def __init__(self, params: Parameters):
         self.formula = {}
 
