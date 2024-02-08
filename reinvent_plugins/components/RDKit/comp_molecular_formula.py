@@ -17,7 +17,6 @@ __all__ = ["MolecularFormula"]
 from dataclasses import dataclass
 from typing import List, Tuple
 import re
-from statistics import geometric_mean
 
 from rdkit import Chem
 from rdkit.Chem import rdMolHash
@@ -90,17 +89,22 @@ class MolecularFormula:
 
         score_list = [es.append(ts) for es, ts in zip(ec_scores, tc_score)]
 
-        scores_final = [geometric_mean(score) for score in score_list]
+        scores_final = [self.geometric_mean(score) for score in ec_scores]
         scores.append(np.array(scores_final))
 
         return ComponentResults(scores)
 
 
-    def gaussian(x, mu, sigma):
+    def gaussian(self, x, mu, sigma):
         return np.exp(-0.5 * np.power((x - mu) / sigma, 2.))
+    
+
+    def geometric_mean(self, scores):
+        iterable = np.array(scores)
+        return np.exp(np.log(iterable).mean())
     
 
     def score_formula(self, formula:dict):
         """take the element counts for the formula, appy to every atom"""
-        scores = [self.gaussian(formula.get(element, 0), mu=n_atoms, sigma=1)for element, n_atoms in self.formula]
+        scores = [self.gaussian(formula.get(element, 0), n_atoms, 1) for element, n_atoms in self.formula.items()]
         return scores
