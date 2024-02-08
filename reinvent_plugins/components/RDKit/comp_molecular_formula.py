@@ -41,7 +41,7 @@ class Parameters:
 
     formula: List[str]
 
-
+@add_tag("__component")
 class MolecularFormula:
     def __init__(self, params: Parameters):
         self.formula = {}
