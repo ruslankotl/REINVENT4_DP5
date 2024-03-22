@@ -34,7 +34,7 @@ class Parameters:
 @add_tag("__component")
 class DP5:
 
-    workflow_dict = {'dp5': 'w', 'cmae': 's', 'cmax': 's'}
+    workflow_dict = {'dp5': 'w', 'cmae': 's', 'cmax': 's', 'rmse': 's'}
 
     def __init__(self, params: Parameters) -> np.array:
         self.python_path = params.python_path[0]
@@ -47,49 +47,63 @@ class DP5:
         cwd = os.getcwd()
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            input_smi_file = os.path.join(temp_dir, 'input.smiles')
 
-            logger.info("Starting DP5 calculations in %s" % temp_dir)
-            bad_ids = self._prepare_input_data(smilies, input_smi_file)
+            logger.info("Preparing molecules DP5 calculations in %s" % temp_dir)
+            bad_ids, sdf_paths = self._prepare_input_data(smilies, temp_dir)
 
+            logger.info("Number of molecules not embedded: %i", len(bad_ids))
             logger.debug("Following molecules did not embed: %s" % str(bad_ids))
 
+            if sdf_paths:
         # create temporary folder
-            os.chdir(temp_dir)
-            command = [self.python_path ,self.pydp4_path,
-                            '--Smiles', input_smi_file, self.nmr_file,
-                            "-w", self.workflow_dict[self.workflow],
-                            "--OutputFolder", temp_dir]
-            
-            logger.info("Running the command...")
-            logger.debug(' '.join(command))
-            result = run_command(command)
-            os.chdir(cwd)
+                os.chdir(temp_dir)
+                command = [self.python_path ,self.pydp4_path,
+                                *sdf_paths, self.nmr_file,
+                                "-w", self.workflow_dict[self.workflow],
+                                "--OutputFolder", temp_dir]
+                
+                logger.info("Running DP5 command...")
+                logger.debug(' '.join(command))
+                result = run_command(command)
+                os.chdir(cwd)
 
-            raw_scores = self._parse_output_data(temp_dir)
+                raw_scores = self._parse_output_data(temp_dir)
 
-            for id in sorted(bad_ids):
-                raw_scores.insert(id, None)
+                for id in sorted(bad_ids):
+                    raw_scores.insert(id, np.nan)
+
+            else:
+                raw_scores = [np.nan] * len(smilies)
 
             scores.append(np.array(raw_scores))
 
             return ComponentResults(scores)
             
 
-
-    def _prepare_input_data(self, smiles: List[str], path: str):
+    def _prepare_input_data(self, smiles: List[str], path: str) -> tuple[list[int], list[str]]:
+        """Takes SMILES of molecules, embeds them, returns SD File for successful, and IDs of unembedded molecules
+        Arguments:
+        - smiles(list of strings): proposed SMILES
+        - path(str): path to temporary folder for writing
+        """
         bad_ids = []
-        with open(path, 'w') as f:
-            for i, smi in enumerate(smiles):
-                mol = Chem.MolFromSmiles(smi)
-                mol_h = AllChem.AddHs(mol, addCoords=True)
-                cid = AllChem.EmbedMolecule(mol_h, forceTol=0.001, randomSeed=42)
-                try:
-                    AllChem.MMFFOptimizeMolecule(mol_h)
-                    f.write(f"{smi}\n")
-                except ValueError:
-                    bad_ids.append(i)
-        return bad_ids
+        sdf_paths = []
+
+        for i, smi in enumerate(smiles):
+            logger.debug("Embedding molecule %s", smi)
+            mol = Chem.MolFromSmiles(smi)
+            mol_h = AllChem.AddHs(mol, addCoords=True)
+            cid = AllChem.EmbedMolecule(mol_h, forceTol=0.0135, randomSeed=42)
+            try:
+                AllChem.MMFFOptimizeMolecule(mol_h)
+                sdf_path = f'{path}/{i:03}.sdf'
+                writer = Chem.SDWriter(sdf_path)
+                writer.write(mol_h)
+                sdf_paths.append(sdf_path)
+            except ValueError:
+                logger.debug("Failed to embed molecule %s", smi)
+                bad_ids.append(i)
+        return bad_ids, sdf_paths
     
 
     def _parse_output_data(self, path: str) -> Tuple[List[str], List[float]]:
@@ -108,7 +122,7 @@ class DP5:
             # get DP5_Exp_probs
             raw_scores = data['DP5_Exp_probs']
 
-        elif self.workflow == 'cmae' or self.workflow == 'cmax':
+        elif self.workflow in ['cmae', 'cmax', 'rmse']:
             dp4_path = f"{path}/dp4/data_dic.p"
 
             if not os.path.isfile(dp4_path):
@@ -123,10 +137,15 @@ class DP5:
 
             for isomer in c_errors:
                 errors = np.array(isomer)
-                if self.workflow == 'mae':
+                if self.workflow == 'cmae':
                     result = np.abs(errors).mean()
-                else:
+                elif self.workflow == 'cmax':
                     result = np.max(errors)
+                elif self.workflow == 'rmse':
+                    result = np.sqrt(np.sum(errors**2)).mean()
+                else:
+                    raise ValueError('Wrong workflow chosen')
+                
                 raw_scores.append(result)
 
         return raw_scores
